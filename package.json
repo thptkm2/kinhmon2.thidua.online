@@ -1,0 +1,17 @@
+{
+  "name": "web_thidua",
+  "version": "1.0.0",
+  "description": "",
+  "main": "import-teachers.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0",
+    "csv-parser": "^3.0.0",
+    "node-fetch": "^2.7.0"
+  }
+}

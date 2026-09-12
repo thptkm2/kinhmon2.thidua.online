@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tổ Trưởng Duyệt Điểm - THPT Kinh Môn II</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
+        body { background-color: #f4f6f9; color: #333; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #003366; text-align: center; margin-bottom: 20px; }
+        .user-info { background: #eef4fc; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; font-size: 14px; }
+        th { background-color: #003366; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .btn-approve { background-color: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-view { background-color: #003366; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .submitted { background-color: #fff3cd; color: #856404; }
+        .approved { background-color: #d4edda; color: #155724; }
+        
+        /* Modal Style */
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); overflow-y: auto; }
+        .modal-content { background: white; margin: 3% auto; padding: 25px; border-radius: 10px; width: 90%; max-width: 750px; }
+        .close-btn { float: right; font-size: 24px; font-weight: bold; cursor: pointer; color: #aaa; }
+        .close-btn:hover { color: black; }
+        
+        .criteria-table { width: 100%; margin-top: 15px; }
+        .criteria-table th { background-color: #f1f3f5; color: #333; text-align: left; font-size: 13px; }
+        .criteria-table td { text-align: left; font-size: 13px; padding: 8px; }
+        .score-input { width: 60px; padding: 5px; text-align: center; font-weight: bold; }
+        .total-box { background: #eef4fc; padding: 12px; border-radius: 6px; text-align: right; margin-top: 15px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>TỔ TRƯỜNG CHUYÊN MÔN - DUYỆT ĐIỂM THI ĐỦA</h2>
+        
+        <div class="user-info">
+            <div><strong>Tổ chuyên môn:</strong> <span>Tổ Toán - Tự Nhiên</span></div>
+            <button onclick="loadEvaluations()" style="padding: 8px 15px; background: #003366; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">Tải lại trang</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Mã GV</th>
+                    <th>Họ và Tên</th>
+                    <th>Điểm Tự Chấm</th>
+                    <th>Điểm Tổ Trưởng</th>
+                    <th>Trạng Thái</th>
+                    <th>Thao Tác</th>
+                </tr>
+            </thead>
+            <tbody id="evaluation-list">
+                <tr><td colspan="6">Đang tải dữ liệu...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- MODAL ĐÁNH GIÁ CHI TIẾT -->
+    <div id="detail-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <h3 style="color: #003366;" id="modal-title">Chi Tiết Đánh Giá Thi Đua</h3>
+            <p style="margin-top: 5px; color: #666; font-size: 13px;" id="modal-teacher-info"></p>
+            
+            <hr style="margin: 15px 0;">
+
+            <table class="criteria-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50%;">Tiêu chí đánh giá</th>
+                        <th style="width: 15%; text-align: center;">Tối đa</th>
+                        <th style="width: 17%; text-align: center;">GV Chấm</th>
+                        <th style="width: 18%; text-align: center;">Tổ Trưởng</th>
+                    </tr>
+                </thead>
+                <tbody id="criteria-list"></tbody>
+            </table>
+
+            <div style="margin-top: 15px;">
+                <label><b>Ghi chú / Minh chứng của GV:</b></label>
+                <div id="modal-note" style="background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; margin-top: 5px;"></div>
+            </div>
+
+            <div class="total-box">
+                <span>Tổng điểm Tổ trưởng chấm: </span>
+                <strong id="modal-total-score" style="color: #003366; font-size: 20px;">0</strong> / 100
+            </div>
+
+            <div style="text-align: right; margin-top: 15px;">
+                <button onclick="closeModal()" style="padding: 8px 15px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">Hủy</button>
+                <button class="btn-approve" onclick="saveEvaluation()">Lưu & Duyệt Phiếu</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://qrgwuxargwbrdjvodnjd.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_QEdIz6vB2GlfEr1bp9ldaw_pxqt2IWF';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        let evaluationsData = [];
+        let currentEvalId = null;
+
+        // Danh sách 4 tiêu chí thi đua chuẩn
+        const CRITERIA_LIST = [
+            { id: 'c1', name: '1. Chấp hành chủ trương, đường lối của Đảng, pháp luật', max: 20 },
+            { id: 'c2', name: '2. Thực hiện quy chế chuyên môn, hồ sơ sổ sách', max: 30 },
+            { id: 'c3', name: '3. Chất lượng giảng dạy và hiệu quả công tác', max: 30 },
+            { id: 'c4', name: '4. Tham gia các hoạt động phong trào, đoàn thể', max: 20 }
+        ];
+
+        async function loadEvaluations() {
+            const listBody = document.getElementById('evaluation-list');
+            listBody.innerHTML = '<tr><td colspan="6">Đang tải dữ liệu...</td></tr>';
+
+            try {
+                const { data: evals, error: evalErr } = await supabaseClient.from('evaluations').select('*');
+                if (evalErr) throw evalErr;
+
+                const { data: profiles } = await supabaseClient.from('profiles').select('*');
+                const profileMap = {};
+                if (profiles) profiles.forEach(p => profileMap[p.id] = p);
+
+                evaluationsData = evals.map(item => ({
+                    ...item,
+                    profile: profileMap[item.teacher_id] || { full_name: 'Giáo viên', teacher_code: 'GV' }
+                }));
+
+                listBody.innerHTML = '';
+                
+                evaluationsData.forEach((item, index) => {
+                    const isApproved = item.status === 'approved' || item.status === 'APPROVED';
+                    const row = document.createElement('tr');
+                    
+                    row.innerHTML = `
+                        <td><b>${item.profile.teacher_code || 'GV'}</b></td>
+                        <td style="text-align: left;"><b>${item.profile.full_name || 'Chưa cập nhật'}</b></td>
+                        <td style="font-size: 15px; font-weight: bold; color: #555;">${item.self_score || 0}</td>
+                        <td style="font-size: 16px; color: #003366; font-weight: bold;">${item.approved_score !== null && item.approved_score !== undefined ? item.approved_score : '-'}</td>
+                        <td>
+                            <span class="badge ${isApproved ? 'approved' : 'submitted'}">
+                                ${isApproved ? 'Đã duyệt' : 'Chờ duyệt'}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn-view" onclick="openDetailModal(${index})">🔍 Xem & Chấm Điểm</button>
+                        </td>
+                    `;
+                    listBody.appendChild(row);
+                });
+
+            } catch (err) {
+                listBody.innerHTML = `<tr><td colspan="6" style="color:red;">Lỗi: ${err.message}</td></tr>`;
+            }
+        }
+
+        function openDetailModal(index) {
+            const item = evaluationsData[index];
+            currentEvalId = item.id;
+
+            document.getElementById('modal-title').innerText = `Chấm điểm: ${item.profile.full_name}`;
+            document.getElementById('modal-teacher-info').innerText = `Mã GV: ${item.profile.teacher_code || 'GV'} | Trạng thái: ${item.status}`;
+            document.getElementById('modal-note').innerText = item.note || 'Không có ghi chú.';
+
+            const selfDetails = item.self_details || {};
+            const approvedDetails = item.approved_details || {};
+
+            const criteriaBody = document.getElementById('criteria-list');
+            criteriaBody.innerHTML = '';
+
+            // LOGIC TÍNH ĐIỂM CHUẨN:
+            // Nếu GV không gửi self_details, tự tính tỉ lệ điểm tự chấm dựa trên điểm tối đa của tiêu chí
+            const totalSelfScore = item.self_score || 0;
+
+            CRITERIA_LIST.forEach(c => {
+                let selfVal = 0;
+
+                if (selfDetails[c.id] !== undefined) {
+                    selfVal = Number(selfDetails[c.id]);
+                } else {
+                    // Nếu thiếu self_details, tính ước lượng: (Điểm tối đa tiêu chí / 100) * Điểm tự chấm
+                    selfVal = Math.min(c.max, Math.round((c.max / 100) * totalSelfScore));
+                }
+
+                // Điểm Tổ trưởng chấm
+                const ttVal = approvedDetails[c.id] !== undefined ? Number(approvedDetails[c.id]) : selfVal;
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${c.name}</td>
+                    <td style="text-align: center;"><b>${c.max}</b></td>
+                    <td style="text-align: center; color: #003366; font-weight: bold; font-size: 15px;">${selfVal}</td>
+                    <td style="text-align: center;">
+                        <input type="number" class="score-input item-score" data-id="${c.id}" data-max="${c.max}" value="${ttVal}" min="0" max="${c.max}" onchange="calculateTotal()">
+                    </td>
+                `;
+                criteriaBody.appendChild(row);
+            });
+
+            calculateTotal();
+            document.getElementById('detail-modal').style.display = 'block';
+        }
+
+        function calculateTotal() {
+            let total = 0;
+            const inputs = document.querySelectorAll('.item-score');
+            inputs.forEach(input => {
+                let val = parseInt(input.value) || 0;
+                const max = parseInt(input.getAttribute('data-max'));
+                if (val > max) { val = max; input.value = max; }
+                if (val < 0) { val = 0; input.value = 0; }
+                total += val;
+            });
+            document.getElementById('modal-total-score').innerText = total;
+        }
+
+        async function saveEvaluation() {
+            if (!currentEvalId) return;
+
+            const totalScore = parseInt(document.getElementById('modal-total-score').innerText);
+            const approvedDetails = {};
+
+            document.querySelectorAll('.item-score').forEach(input => {
+                const id = input.getAttribute('data-id');
+                approvedDetails[id] = parseInt(input.value) || 0;
+            });
+
+            const { error } = await supabaseClient
+                .from('evaluations')
+                .update({
+                    approved_score: totalScore,
+                    approved_details: approvedDetails,
+                    status: 'approved',
+                    updated_at: new Date()
+                })
+                .eq('id', currentEvalId);
+
+            if (error) {
+                alert('❌ Lỗi khi lưu điểm: ' + error.message);
+            } else {
+                alert('🎉 Đã thẩm định và lưu điểm thành công!');
+                closeModal();
+                loadEvaluations();
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('detail-modal').style.display = 'none';
+        }
+
+        window.addEventListener('DOMContentLoaded', loadEvaluations);
+    </script>
+</body>
+</html>

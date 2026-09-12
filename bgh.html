@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ban Giám Hiệu - Tổng Hợp & Xếp Loại Thi Đua</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
+        body { background-color: #f4f6f9; color: #333; padding: 20px; }
+        .container { max-width: 1100px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #003366; text-align: center; margin-bottom: 20px; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .stat-card { background: #eef4fc; padding: 15px; border-radius: 8px; text-align: center; border-left: 5px solid #003366; }
+        .stat-card h4 { color: #555; font-size: 13px; text-transform: uppercase; margin-bottom: 5px; }
+        .stat-card .number { font-size: 24px; font-weight: bold; color: #003366; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 14px; }
+        th { background-color: #003366; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .submitted { background-color: #fff3cd; color: #856404; }
+        .approved { background-color: #d4edda; color: #155724; }
+        
+        .btn-export { background-color: #17a2b8; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .btn-refresh { background-color: #003366; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>BAN GIÁM HIỆU - TỔNG HỢP & XẾP LOẠI THI ĐỦA</h2>
+
+        <!-- THỐNG KÊ NHANH -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h4>Tổng số GV đã nộp</h4>
+                <div class="number" id="stat-total">0</div>
+            </div>
+            <div class="stat-card">
+                <h4>Tổ trưởng đã duyệt</h4>
+                <div class="number" id="stat-approved">0</div>
+            </div>
+            <div class="stat-card">
+                <h4>Chờ tổ trưởng duyệt</h4>
+                <div class="number" id="stat-pending">0</div>
+            </div>
+            <div class="stat-card">
+                <h4>Điểm TB Toàn trường</h4>
+                <div class="number" id="stat-avg">0</div>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+            <button class="btn-refresh" onclick="loadBGHData()">🔄 Tải lại dữ liệu</button>
+            <button class="btn-export" onclick="window.print()">🖨️ In / Xuất Báo Cáo PDF</button>
+        </div>
+
+        <!-- BẢNG TỔNG HỢP -->
+        <table>
+            <thead>
+                <tr>
+                    <th>STT</th>
+                    <th>Mã GV</th>
+                    <th>Họ và Tên</th>
+                    <th>Tự Chấm</th>
+                    <th>Tổ Trưởng Chấm</th>
+                    <th>Trạng Thái</th>
+                    <th>Xếp Loại Dự Kiến</th>
+                </tr>
+            </thead>
+            <tbody id="bgh-list">
+                <tr><td colspan="7">Đang tải dữ liệu tổng hợp...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://qrgwuxargwbrdjvodnjd.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_QEdIz6vB2GlfEr1bp9ldaw_pxqt2IWF';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        async function loadBGHData() {
+            const listBody = document.getElementById('bgh-list');
+            listBody.innerHTML = '<tr><td colspan="7">Đang tải dữ liệu tổng hợp...</td></tr>';
+
+            try {
+                // Tải danh sách đánh giá
+                const { data: evals, error: evalErr } = await supabaseClient.from('evaluations').select('*');
+                if (evalErr) throw evalErr;
+
+                // Tải danh sách hồ sơ GV
+                const { data: profiles } = await supabaseClient.from('profiles').select('*');
+                const profileMap = {};
+                if (profiles) profiles.forEach(p => profileMap[p.id] = p);
+
+                if (!evals || evals.length === 0) {
+                    listBody.innerHTML = '<tr><td colspan="7">Chưa có dữ liệu đánh giá nào.</td></tr>';
+                    return;
+                }
+
+                // Cập nhật Thống kê
+                let total = evals.length;
+                let approvedCount = 0;
+                let pendingCount = 0;
+                let totalScoreSum = 0;
+
+                listBody.innerHTML = '';
+
+                evals.forEach((item, index) => {
+                    const profile = profileMap[item.teacher_id] || { full_name: 'Giáo viên', teacher_code: 'GV' };
+                    const isApproved = item.status === 'approved' || item.status === 'APPROVED';
+                    
+                    if (isApproved) approvedCount++; else pendingCount++;
+
+                    const finalScore = isApproved ? (item.approved_score ?? item.self_score) : item.self_score;
+                    totalScoreSum += finalScore;
+
+                    // Phân loại thi đua dựa trên điểm số
+                    let rank = 'Trung bình';
+                    if (finalScore >= 90) rank = '<b>Hoàn thành xuất sắc</b>';
+                    else if (finalScore >= 70) rank = 'Hoàn thành tốt';
+                    else if (finalScore >= 50) rank = 'Hoàn thành nhiệm vụ';
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${index + 1}</td>
+                        <td><b>${profile.teacher_code || 'GV'}</b></td>
+                        <td style="text-align: left;"><b>${profile.full_name || 'Chưa cập nhật'}</b></td>
+                        <td style="color: #555;">${item.self_score || 0}</td>
+                        <td style="font-size: 16px; color: #003366; font-weight: bold;">${item.approved_score ?? '-'}</td>
+                        <td>
+                            <span class="badge ${isApproved ? 'approved' : 'submitted'}">
+                                ${isApproved ? 'Đã duyệt' : 'Chờ duyệt'}
+                            </span>
+                        </td>
+                        <td style="color: #28a745;">${rank}</td>
+                    `;
+                    listBody.appendChild(row);
+                });
+
+                // Gán chỉ số thống kê
+                document.getElementById('stat-total').innerText = total;
+                document.getElementById('stat-approved').innerText = approvedCount;
+                document.getElementById('stat-pending').innerText = pendingCount;
+                document.getElementById('stat-avg').innerText = (totalScoreSum / total).toFixed(1);
+
+            } catch (err) {
+                listBody.innerHTML = `<tr><td colspan="7" style="color:red; font-weight:bold;">Lỗi nạp dữ liệu: ${err.message}</td></tr>`;
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', loadBGHData);
+    </script>
+</body>
+</html>
